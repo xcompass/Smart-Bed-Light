@@ -18,6 +18,8 @@
 #define GREEN 1
 #define BLUE 2
 
+#define BRIGHTNESS_STEP 1
+
 // senser pins
 #define LIGHT_PIN 7
 char IR_PIN[NUM_IRS] = {
@@ -35,12 +37,12 @@ char LED_STRIPS[NUM_LEDS][LED_CHANNELS] = {/*andelle*/
 #define INCREASE 1
 #define DECREASE -1
 
-#define TIMEOUT_DELAY 60000 // timeout for turn off led automatically, 1 minus
+#define TIMEOUT_DELAY 5000 // timeout for turn off led automatically, 1 minus
 #define MAX_BRIGHTNESS 4095
 
-char led_status[NUM_LEDS] = {0}; // 0 == off, max == MAX_BRIGHTNESS
+int led_status[NUM_LEDS] = {0}; // 0 == off, max == MAX_BRIGHTNESS
 
-char led_action[NUM_LEDS] = {NONE};
+//char led_action[NUM_LEDS] = {NONE};
 
 unsigned long timer[NUM_LEDS] = {0};
 
@@ -49,7 +51,7 @@ void setup()
   /* Call Tlc.init() to setup the tlc.
    You can optionally pass an initial PWM value (0 - 4095) for all channels.*/
   Tlc.init();
-  Serial.begin(9600);
+  //Serial.begin(9600);
   for(int i=0; i< NUM_IRS; i++)
   { 
     pinMode(IR_PIN[i],INPUT);
@@ -73,12 +75,9 @@ void loop()
     //Serial.println("Light on");
     for(int i=0; i<NUM_LEDS; i++)
     {
-      if(LED_OFF == led_status[i])
+      if(LED_OFF != led_status[i])
       {
-        led_action[i] = NONE;
-      } 
-      else {
-        led_action[i] = DECREASE;
+        turnOffLed(i);
       }
     }
 
@@ -87,15 +86,19 @@ void loop()
 
   for(int i=0; i<NUM_LEDS; i++)
   {
+     //if(ir_status[i] == IR_ON) {Serial.print("IR status for "); Serial.print(i); Serial.print(" is "); Serial.println(ir_status[i]);}
      if(IR_ON == ir_status[i]) 
      {
-       led_action[i] = INCREASE;
+       turnOnLed(i);
+       startTimer(i);
      } else {
-       led_action[i] = NONE;
+       if(isTimerOn(i) && isTimeout(i)) 
+       {
+         turnOffLed(i);
+         stopTimer(i);
+       }
      }
   }
-  
-  process();
 }
 
 // get input according to sample values
@@ -111,58 +114,50 @@ boolean getInput(int pin)
   return input >> SAMPLE_THRESHOLD;
 }
 
-void process()
-{
-  for(int i=0; i<NUM_LEDS; i++)
-  {
-    // reach to max brightness, stop increase
-    if(MAX_BRIGHTNESS == led_status[i] && INCREASE == led_action[i]) 
-    {
-      led_action[i] = NONE;
-    }
-
-    // if timer times out, we should turn off the led
-    if(isTimerOn(i) && isTimeout(i))
-    {
-      led_action[i] = DECREASE;
-    }
-  
-    if(MAX_BRIGHTNESS == led_status[i] && NONE == led_action[i]) 
-    {
-      startTimer(i);
-    }
-    
-    led_status[i] += led_action[i];
-    
-    // decreased to off, reset everything
-    if(led_action[i] == DECREASE && LED_OFF == led_status[i])
-    {
-      led_action[i] = NONE;
-      timer[i] = 0;
-    }
-
-    Tlc.set(LED_STRIPS[i][RED], led_status[i]);
-    Tlc.set(LED_STRIPS[i][GREEN], led_status[i]);
-    Tlc.set(LED_STRIPS[i][BLUE], led_status[i]);
-    Tlc.update();
-    delay(1);
-  }
-}
-
 void startTimer(int led_index)
 {
+  //Serial.print("Timer started on "); Serial.println(led_index);
   timer[led_index] = millis();
+}
+
+void stopTimer(int led_index)
+{
+  timer[led_index] = 0;
 }
 
 boolean isTimeout(int led_index)
 {
+  //Serial.print("Timer off on "); Serial.println(led_index);
   return timer[led_index] + TIMEOUT_DELAY <= millis();
 }
-
 
 boolean isTimerOn(int led_index)
 {
   return timer[led_index] != 0;
 }
 
+void turnOnLed(int led_index)
+{
+  for(int j = led_status[led_index]; j<=MAX_BRIGHTNESS; j+=BRIGHTNESS_STEP) 
+  {
+    Tlc.set(LED_STRIPS[led_index][RED], j);
+    Tlc.set(LED_STRIPS[led_index][GREEN], j);
+    Tlc.set(LED_STRIPS[led_index][BLUE], j);
+    Tlc.update();
+    delay(1);
+  }
+  led_status[led_index] = MAX_BRIGHTNESS;
+}
 
+void turnOffLed(int led_index)
+{
+  for(int j = led_status[led_index]; j>0; j-=BRIGHTNESS_STEP) 
+  {
+    Tlc.set(LED_STRIPS[led_index][RED], j);
+    Tlc.set(LED_STRIPS[led_index][GREEN], j);
+    Tlc.set(LED_STRIPS[led_index][BLUE], j);
+    Tlc.update();
+    delay(1);
+  }
+  led_status[led_index] = 0;
+}
