@@ -2,3 +2,5 @@ SmartBedLight
 
 An automated smart bed night light with ATMega328 and TLC5940.
 For configuration, please refer to http://code.google.com/p/tlc5940arduino/
+
+Version 1 and 2 are using TLC5940. Version 3 is using 74595 shifter chip.
